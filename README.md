@@ -52,7 +52,7 @@ doc.bookmarks.each_pair do |bookmark_name, bookmark_object|
 end
 ```
 
-Don't have a local file but a buffer? Docx handles those to:
+Don't have a local file but a buffer? Docx handles those too:
 
 ```ruby
 require 'docx'
@@ -261,3 +261,4 @@ The following is a list of attributes and what they control within the style.
 * Default formatting of inserted elements to inherited values
 * Implement formattable elements.
 * Easier multi-line text insertion at a single bookmark (inserting paragraph nodes after the one containing the bookmark)
+
