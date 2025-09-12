@@ -8,14 +8,21 @@ on:
 jobs:
   build:
     name: Build a package
-
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v3
 
-      - uses: softprops/action-gh-release@v1
-        if: startsWith(github.ref, 'refs/tags/') # Run only when tagged like v1.0.1
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/') # Run only when tagged like v1.0.1
+    steps:
+      - id: package_name
+        run: |
+          echo "package_name=$(basename pkg/*.gem | tail -n1)" >> $GITHUB_OUTPUT
+
+      - uses: softprops/action-gh-release@v2
         with:
-          files: packages/${{steps.package_name.outputs.package_name}}.zip
+          files: pkg/${{steps.package_name.outputs.package_name}}
           generate_release_notes: true
+      - uses: rubygems/release-gem@v1
