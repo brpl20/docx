@@ -8,7 +8,8 @@
   },
   "partners": [
     {
-      "name": "EDUARDO HAMILTON WALBER",
+      "name": "EDUARDO ",
+      "last_nam": "HAMILTON WALBER",
       "nationality": "BRASILEIRO",
       "civil_status": "SOLTEIRO",
       "birth_city": "Cascavel – PR",
@@ -27,7 +28,8 @@
       "is_administrator": false
     },
     {
-      "name": "BRUNO PELLIZZETTI",
+      "name": "BRUNO",
+      "last_name": "PELLIZZETTI",
       "nationality": "BRASILEIRO",
       "civil_status": "SOLTEIRO",
       "birth_city": "Curitiba – PR",
@@ -47,21 +49,21 @@
     }
   ],
   "capital": {
-    "total_value": 10000.00,
+    "total_value": 10000.0,
     "total_quotes": 10000,
-    "quote_value": 1.00,
+    "quote_value": 1.0,
     "partners": [
       {
         "name": "EDUARDO HAMILTON WALBER",
         "quotes": 3000,
-        "value": 3000.00,
-        "percentage": 30.00
+        "value": 3000.0,
+        "percentage": 30.0
       },
       {
         "name": "BRUNO PELLIZZETTI",
         "quotes": 7000,
-        "value": 7000.00,
-        "percentage": 70.00
+        "value": 7000.0,
+        "percentage": 70.0
       }
     ]
   }
