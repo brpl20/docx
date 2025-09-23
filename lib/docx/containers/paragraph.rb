@@ -110,7 +110,119 @@ module Docx
         alias_method :style_id=, :style=
         alias_method :text, :to_s
 
+        # Consolidates adjacent text runs with identical formatting
+        # This helps solve the issue where placeholders get fragmented across multiple runs
+        def consolidate_text_runs
+          runs = text_runs
+          return if runs.empty?
+
+          consolidated = []
+          current_group = [runs.first]
+          current_formatting = runs.first.formatting
+
+          runs[1..-1].each do |run|
+            if run.formatting == current_formatting
+              # Same formatting, add to current group
+              current_group << run
+            else
+              # Different formatting, consolidate current group and start new one
+              consolidate_group(current_group) if current_group.length > 1
+              consolidated << current_group
+              current_group = [run]
+              current_formatting = run.formatting
+            end
+          end
+
+          # Don't forget the last group
+          consolidate_group(current_group) if current_group.length > 1
+          consolidated << current_group
+        end
+
+        # Performs text substitution across all text runs in the paragraph
+        # This solves the issue where placeholders are split across multiple runs
+        def substitute_across_runs(pattern, replacement)
+          # First, get all text nodes in order
+          all_text_nodes = []
+          text_runs.each do |run|
+            run.instance_variable_get(:@text_nodes).each do |text_node|
+              all_text_nodes << text_node
+            end
+          end
+
+          return if all_text_nodes.empty?
+
+          # Concatenate all text content
+          full_text = all_text_nodes.map(&:content).join('')
+          
+          # Check if pattern exists in the full text
+          return unless full_text.match?(pattern)
+
+          # Perform the replacement
+          new_text = full_text.gsub(pattern, replacement)
+
+          # Redistribute the new text back to the nodes
+          # Try to maintain original text node boundaries where possible
+          if all_text_nodes.length == 1
+            # Simple case: single text node
+            all_text_nodes.first.content = new_text
+          else
+            # Complex case: multiple text nodes
+            # We'll put all the text in the first node and clear the others
+            # This maintains formatting while ensuring substitution works
+            all_text_nodes.first.content = new_text
+            all_text_nodes[1..-1].each { |node| node.content = '' }
+          end
+
+          # Update the text in text runs
+          text_runs.each { |run| run.send(:reset_text) }
+        end
+
+        # Performs block-based text substitution across all text runs
+        def substitute_across_runs_with_block(pattern, &block)
+          all_text_nodes = []
+          text_runs.each do |run|
+            run.instance_variable_get(:@text_nodes).each do |text_node|
+              all_text_nodes << text_node
+            end
+          end
+
+          return if all_text_nodes.empty?
+
+          full_text = all_text_nodes.map(&:content).join('')
+          return unless full_text.match?(pattern)
+
+          new_text = full_text.gsub(pattern) { |_matched| 
+            block.call(Regexp.last_match)
+          }
+
+          if all_text_nodes.length == 1
+            all_text_nodes.first.content = new_text
+          else
+            all_text_nodes.first.content = new_text
+            all_text_nodes[1..-1].each { |node| node.content = '' }
+          end
+
+          text_runs.each { |run| run.send(:reset_text) }
+        end
+
         private
+
+        # Helper method to consolidate a group of text runs with same formatting
+        def consolidate_group(group)
+          return if group.length <= 1
+
+          # Merge all text into the first run
+          first_run = group.first
+          combined_text = group.map(&:text).join('')
+          
+          # Set the combined text in the first run
+          first_run.text = combined_text
+
+          # Remove the other runs from the XML
+          group[1..-1].each do |run|
+            run.node.remove
+          end
+        end
 
         def style_property
           properties&.at_xpath('w:pStyle') || properties&.add_child('<w:pStyle/>').first

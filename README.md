@@ -1,11 +1,13 @@
-# docx
+# docx-br
 
-[![Gem Version](https://badge.fury.io/rb/docx.svg)](https://badge.fury.io/rb/docx)
+[![Gem Version](https://badge.fury.io/rb/docx-br.svg)](https://badge.fury.io/rb/docx-br)
 [![Ruby](https://github.com/ruby-docx/docx/workflows/Ruby/badge.svg)](https://github.com/ruby-docx/docx/actions?query=workflow%3ARuby)
 [![Coverage Status](https://coveralls.io/repos/github/ruby-docx/docx/badge.svg?branch=master)](https://coveralls.io/github/ruby-docx/docx?branch=master)
 [![Gitter](https://badges.gitter.im/ruby-docx/community.svg)](https://gitter.im/ruby-docx/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 
-A ruby library/gem for interacting with `.docx` files. currently capabilities include reading paragraphs/bookmarks, inserting text at bookmarks, reading tables/rows/columns/cells and saving the document.
+A ruby library/gem for interacting with `.docx` files. This is a fork of the original `docx` gem with improvements to handle text substitution across fragmented text runs - a common issue when Word internally splits placeholders across multiple XML nodes.
+
+**Key improvement:** Fixes the well-known issue where placeholders like `{{placeholder}}` or `_placeholder_` fail to be replaced because Word fragments them across multiple text runs.
 
 ## Usage
 
@@ -18,7 +20,7 @@ A ruby library/gem for interacting with `.docx` files. currently capabilities in
 Add the following line to your application's Gemfile:
 
 ```ruby
-gem 'docx'
+gem 'docx-br'
 ```
 
 And then execute:
@@ -30,7 +32,7 @@ bundle install
 Or install it yourself as:
 
 ```shell
-gem install docx
+gem install docx-br
 ```
 
 ### Reading
@@ -124,7 +126,29 @@ doc.paragraphs.each do |p|
 end
 
 # Substitute text, preserving formatting
+# Method 1: Traditional approach (only works if placeholder is not fragmented)
 doc.paragraphs.each do |p|
+  p.each_text_run do |tr|
+    tr.substitute('_placeholder_', 'replacement value')
+  end
+end
+
+# Method 2: NEW - Substitution across fragmented runs (handles Word's text fragmentation)
+doc.paragraphs.each do |p|
+  # This will find and replace placeholders even if Word split them across multiple runs
+  p.substitute_across_runs('{{placeholder}}', 'replacement value')
+  p.substitute_across_runs('_placeholder_', 'another value')
+  
+  # Also works with regex patterns
+  p.substitute_across_runs(/\{\{(\w+)\}\}/, 'replaced')
+end
+
+# Method 3: NEW - Consolidate fragmented runs before substitution
+doc.paragraphs.each do |p|
+  # Merges adjacent runs with identical formatting
+  p.consolidate_text_runs
+  
+  # Now traditional substitution is more likely to work
   p.each_text_run do |tr|
     tr.substitute('_placeholder_', 'replacement value')
   end
@@ -136,6 +160,13 @@ doc.paragraphs.each do |p|
   p.each_text_run do |tr|
     tr.substitute_with_block(/total: (\d+)/) { |match_data| "total: #{match_data[1].to_i * 10}" }
   end
+end
+
+# NEW - Block substitution across fragmented runs
+doc.paragraphs.each do |p|
+  p.substitute_across_runs_with_block(/total: (\d+)/) { |match_data| 
+    "total: #{match_data[1].to_i * 10}" 
+  }
 end
 
 # Save document to specified path
@@ -261,12 +292,172 @@ The following is a list of attributes and what they control within the style.
 -  **vertical_alignment**: Controls the vertical alignment of text within a line.
 -  **lang**: Specifies the language tag for the text.
 
+## Text Substitution Improvements
+
+### The Problem
+
+Word internally fragments text across multiple `<w:r>` (text run) XML nodes, even for text that appears continuous in the document. This causes standard find/replace operations to fail when searching for placeholders like `{{name}}` or `_placeholder_`.
+
+For example, the text `{{name}}` might be stored in the XML as:
+```xml
+<w:r><w:t>{{</w:t></w:r>
+<w:r><w:t>na</w:t></w:r>
+<w:r><w:t>me</w:t></w:r>
+<w:r><w:t>}}</w:t></w:r>
+```
+
+### The Solution
+
+This gem provides new methods to handle substitution across fragmented runs:
+
+1. **`substitute_across_runs(pattern, replacement)`** - Searches for and replaces text across all runs in a paragraph
+2. **`substitute_across_runs_with_block(pattern, &block)`** - Same as above but with block support for dynamic replacements
+3. **`consolidate_text_runs`** - Merges adjacent runs with identical formatting to reduce fragmentation
+
+### Example Usage
+
+```ruby
+require 'docx'
+
+doc = Docx::Document.open('template.docx')
+
+doc.paragraphs.each do |paragraph|
+  # Replace even if {{client_name}} is fragmented
+  paragraph.substitute_across_runs('{{client_name}}', 'ABC Corporation')
+  
+  # Handle multiple placeholders
+  paragraph.substitute_across_runs('{{date}}', Date.today.to_s)
+  paragraph.substitute_across_runs('{{amount}}', '$1,000')
+  
+  # Use regex with captures
+  paragraph.substitute_across_runs_with_block(/\{\{price_(\d+)\}\}/) do |match|
+    price = match[1].to_i * 1.1  # Add 10% markup
+    "$#{price}"
+  end
+end
+
+doc.save('output.docx')
+```
+
+## Placeholder Debugger
+
+The placeholder debugger is a powerful tool to help you identify and fix placeholder replacement issues in your Word documents. It validates that placeholders can be found and replaced correctly, even when Word fragments them across multiple XML nodes.
+
+### Features
+
+- 🔍 **Automatic Detection**: Finds placeholders in your document
+- ⚠️ **Fragmentation Detection**: Identifies when Word has split placeholders
+- ✅ **Validation**: Tests if replacements will work
+- 🏗️ **Code Generation**: Creates a custom replacer class for your template
+- 📊 **Detailed Reporting**: Shows success/failure for each placeholder
+
+### Quick Start
+
+```ruby
+require 'docx'
+
+# Quick check with underline placeholders
+Docx::Debugger.quick_check(
+  'template.docx',
+  :underline,
+  ['office_name', 'partner_name', 'date']
+)
+```
+
+### Supported Placeholder Formats
+
+| Format | Pattern | Example |
+|--------|---------|---------|
+| `:underline` | `_text_` | `_office_name_` |
+| `:mustache` | `{ text }` | `{ office_name }` |
+| `:double_mustache` | `{{ text }}` | `{{ office_name }}` |
+| `:angle` | `< text >` | `< office_name >` |
+| `:square` | `[ text ]` | `[ office_name ]` |
+| `:dollar` | `${text}` | `${office_name}` |
+
+### Basic Debugging
+
+```ruby
+debugger = Docx::Debugger.analyze('template.docx') do |config|
+  config.placeholder_type = :double_mustache
+  config.set_placeholders(['client_name', 'contract_date', 'amount'])
+end
+
+results = debugger.debug!
+```
+
+### Generated Replacer Class
+
+When all placeholders validate successfully, the debugger generates a custom replacer class:
+
+```ruby
+# Generated file: double_mustache_replacer.rb
+
+class DoubleMustacheReplacer
+  def initialize(template_path)
+    @document = Docx::Document.open(template_path)
+    # ...
+  end
+  
+  def client_name=(value)
+    @replacements[:client_name] = value
+  end
+  
+  def replace_all!
+    # Replaces all placeholders using substitute_across_runs
+  end
+  
+  def process!(output_path)
+    replace_all!
+    save(output_path)
+  end
+end
+```
+
+### Using the Generated Class
+
+```ruby
+require_relative 'double_mustache_replacer'
+
+replacer = DoubleMustacheReplacer.new('template.docx')
+replacer.client_name = 'ABC Corporation'
+replacer.contract_date = '2024-01-15'
+replacer.amount = '$50,000'
+
+replacer.process!('final_contract.docx')
+```
+
+## Replacement Validation
+
+The gem includes a comprehensive validation system to ensure all placeholders are properly replaced:
+
+```ruby
+# Validate that all replacements worked
+validator = Docx::ReplacementValidator.validate(
+  'original_template.docx',
+  'processed_output.docx'
+)
+
+validator.report  # Shows detailed validation results
+
+if validator.passed?
+  puts "All placeholders successfully replaced!"
+else
+  puts "Some placeholders were missed:"
+  validator.failed_placeholders.each do |failed|
+    puts "- #{failed[:placeholder]} in paragraph #{failed[:paragraph_index]}"
+  end
+end
+```
+
 ## Development
 
-### todo
+### TODO
 
 * Calculate element formatting based on values present in element properties as well as properties inherited from parents
 * Default formatting of inserted elements to inherited values
-* Implement formattable elements.
+* Implement formattable elements
 * Easier multi-line text insertion at a single bookmark (inserting paragraph nodes after the one containing the bookmark)
+* **Debugger with output class integration** - Enhanced debugger that works with generated replacer classes
+* **Advanced validation features** - More sophisticated error detection and remediation
 
