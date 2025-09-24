@@ -4,6 +4,7 @@
 $LOAD_PATH.unshift(File.expand_path('../lib', __dir__))
 require 'docx'
 require 'json'
+require 'date'
 
 puts "\n" + "="*70
 puts "INTELLIGENT UNDERLINE REPLACEMENT - COMPLETE LEGAL DOCUMENT"
@@ -284,6 +285,74 @@ doc.paragraphs.each do |paragraph|
     result
   end
 
+  # 16. PRO LABORE - Replace with "Parágrafo Sétimo:" or remove if false/nil
+  paragraph.substitute_across_runs_with_block(/(?<![_\w])_pro_labore_(?![_\w])/) do |match|
+    if data['society']['pro_labore']
+      result = "Parágrafo Sétimo:"
+      puts "✅ Replaced _pro_labore_: #{result}"
+      result
+    else
+      puts "✅ Removed _pro_labore_ (pro_labore is false/nil)"
+      ""
+    end
+  end
+
+  # 17. PRO LABORE TEXT - Replace with specific text or remove if false/nil
+  paragraph.substitute_across_runs_with_block(/(?<![_\w])_pro_labore_text_(?![_\w])/) do |match|
+    if data['society']['pro_labore']
+      result = "Pelo exercício da administração terão os sócios administradores direito a uma retirada mensal a título de \"pró-labore\", cujo valor será fixado em comum acordo entre os sócios e levado à conta de Despesas Gerais da Sociedade."
+      puts "✅ Replaced _pro_labore_text_: #{result[0..80]}..."
+      result
+    else
+      puts "✅ Removed _pro_labore_text_ (pro_labore is false/nil)"
+      ""
+    end
+  end
+
+  # 18. DIVIDENDS - Replace with "Parágrafo Terceiro:" or remove if false/nil
+  paragraph.substitute_across_runs_with_block(/(?<![_\w])_dividends_(?![_\w])/) do |match|
+    if data['society']['dividends']
+      result = "Parágrafo Terceiro:"
+      puts "✅ Replaced _dividends_: #{result}"
+      result
+    else
+      puts "✅ Removed _dividends_ (dividends is false/nil)"
+      ""
+    end
+  end
+
+  # 19. DIVIDENDS TEXT - Replace with pattern-based text or remove if false/nil
+  paragraph.substitute_across_runs_with_block(/(?<![_\w])_dividends_text_(?![_\w])/) do |match|
+    if data['society']['dividends']
+      pattern = data['society']['dividends_pattern'] || 1
+      result = case pattern
+               when 1
+                 "Os sócios receberão dividendos proporcionais às suas respectivas participações no capital social."
+               when 2
+                 "Os sócios receberão dividendos desproporcionais às suas respectivas participações no capital social."
+               else
+                 "Os sócios receberão dividendos proporcionais às suas respectivas participações no capital social."
+               end
+      puts "✅ Replaced _dividends_text_ (pattern #{pattern}): #{result[0..80]}..."
+      result
+    else
+      puts "✅ Removed _dividends_text_ (dividends is false/nil)"
+      ""
+    end
+  end
+
+  # 20. DATE - Replace with today's date in Brazilian format
+  paragraph.substitute_across_runs_with_block(/(?<![_\w])_date_(?![_\w])/) do |match|
+    today = Date.today
+    months = [
+      'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
+      'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'
+    ]
+    result = "#{today.day} de #{months[today.month - 1]} de #{today.year}"
+    puts "✅ Replaced _date_: #{result}"
+    result
+  end
+
 end
 
 puts "\n" + "-"*70
@@ -471,6 +540,38 @@ doc.tables.each_with_index do |table, table_index|
           result
         end
 
+        # 7. PARTNER 1 FULL NAME - First partner (for signatures)
+        paragraph.substitute_across_runs_with_block(/(?<![_\w])_partner_1_full_name_(?![_\w])/) do |match|
+          partner = data['partners'][0]
+          result = partner ? full_name(partner) : ""
+          puts "✅ Table #{table_index + 1}, Row #{row_index + 1}, Cell #{cell_index + 1}: _partner_1_full_name_ → #{result}"
+          result
+        end
+
+        # 8. PARTNER 1 ASSOCIATION - First partner's role
+        paragraph.substitute_across_runs_with_block(/(?<![_\w])_parner_1_association_(?![_\w])/) do |match|
+          partner = data['partners'][0]
+          result = partner ? partner['association'] : ""
+          puts "✅ Table #{table_index + 1}, Row #{row_index + 1}, Cell #{cell_index + 1}: _parner_1_association_ → #{result}"
+          result
+        end
+
+        # 9. PARTNER 2 FULL NAME - Second partner (for signatures)
+        paragraph.substitute_across_runs_with_block(/(?<![_\w])_partner_2_full_name_(?![_\w])/) do |match|
+          partner = data['partners'][1]
+          result = partner ? full_name(partner) : ""
+          puts "✅ Table #{table_index + 1}, Row #{row_index + 1}, Cell #{cell_index + 1}: _partner_2_full_name_ → #{result}"
+          result
+        end
+
+        # 10. PARTNER 2 ASSOCIATION - Second partner's role
+        paragraph.substitute_across_runs_with_block(/(?<![_\w])_partner_2_association_(?![_\w])/) do |match|
+          partner = data['partners'][1]
+          result = partner ? partner['association'] : ""
+          puts "✅ Table #{table_index + 1}, Row #{row_index + 1}, Cell #{cell_index + 1}: _partner_2_association_ → #{result}"
+          result
+        end
+
 
 
 
@@ -481,10 +582,10 @@ doc.tables.each_with_index do |table, table_index|
           # Get all partners except the admin (who is used in the first row)
           admin_partner = data['partners'].find { |p| p['is_administrator'] }
           remaining_partners = data['partners'].reject { |p| p['is_administrator'] }
-          
+
           remaining_partners.each_with_index do |partner_info, idx|
             partner_num = idx + 2  # Start numbering from 2
-            
+
             # Find the corresponding capital data by matching names
             partner_capital = data['capital']['partners'].find { |pc| pc['name'] == full_name(partner_info) }
             next unless partner_capital

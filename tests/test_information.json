@@ -4,7 +4,10 @@
     "city": "Cascavel",
     "state": "PR",
     "address": "Rua Paraná, 3045, Sala 1204, Centro",
-    "zip_code": "85810-010"
+    "zip_code": "85810-010",
+    "pro_labore": true,
+    "dividends": true,
+    "dividends_pattern": 1
   },
   "partners": [
     {
@@ -25,7 +28,8 @@
       "complement": "CASA",
       "neighborhood": "SANTA CRUZ",
       "zip_code": "85806-010",
-      "is_administrator": false
+      "is_administrator": false,
+      "association": "Sócio"
     },
     {
       "name": "BRUNO",
@@ -45,7 +49,29 @@
       "complement": "APT 703",
       "neighborhood": "CENTRO",
       "zip_code": "85810-240",
-      "is_administrator": true
+      "is_administrator": true,
+      "association": "Sócio Administrador"
+    },
+    {
+      "name": "CARLOS",
+      "last_name": "ALBERTO SILVA",
+      "nationality": "BRASILEIRO",
+      "civil_status": "CASADO",
+      "birth_city": "São Paulo – SP",
+      "oab_state": "PR",
+      "oab_number": "OABpr 87432",
+      "birth_date": "15/08/1985",
+      "profession": "Advogado",
+      "cpf": "123.456.789-00",
+      "city": "Cascavel",
+      "state": "PR",
+      "address": "AVENIDA BRASIL",
+      "number": "1234",
+      "complement": "SALA 10",
+      "neighborhood": "CENTRO",
+      "zip_code": "85801-000",
+      "is_administrator": false,
+      "association": "Sócio de Serviço"
     }
   ],
   "capital": {
@@ -55,15 +81,21 @@
     "partners": [
       {
         "name": "EDUARDO HAMILTON WALBER",
-        "quotes": 3000,
-        "value": 3000.0,
-        "percentage": 30.0
+        "quotes": 2000,
+        "value": 2000.0,
+        "percentage": 20.0
       },
       {
         "name": "BRUNO PELLIZZETTI",
-        "quotes": 7000,
-        "value": 7000.0,
-        "percentage": 70.0
+        "quotes": 5000,
+        "value": 5000.0,
+        "percentage": 50.0
+      },
+      {
+        "name": "CARLOS ALBERTO SILVA",
+        "quotes": 3000,
+        "value": 3000.0,
+        "percentage": 30.0
       }
     ]
   }
