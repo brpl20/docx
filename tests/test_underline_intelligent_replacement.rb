@@ -26,8 +26,9 @@ doc = Docx::Document.open(template_file)
 # Helpers
 ## Full Name
 def full_name(p)
-  [p['name'], p['last_name'] || p['last_nam']].compact.join(' ').squeeze(' ').strip
+  [p['name'], p['last_name']].compact.join(' ').squeeze(' ').strip
 end
+
 
 ## Address
 def address_str(p)
@@ -292,80 +293,78 @@ puts "-"*70
 # First pass: Add rows for multiple partners
 doc.tables.each_with_index do |table, table_index|
   puts "\n📊 Table #{table_index + 1}: Adding rows for multiple partners"
-  
+
   # Find the partner row
   partner_row_index = nil
-  
+
   table.rows.each_with_index do |row, row_index|
-    row_text = row.cells.map { |cell| 
+    row_text = row.cells.map { |cell|
       cell.paragraphs.map(&:to_s).join(' ')
     }.join(' ')
-    
-    if row_text.include?('_partner_full_name_') || 
-       row_text.include?('_partner_total_quotes_') || 
+
+    if row_text.include?('_partner_full_name_') ||
+       row_text.include?('_partner_total_quotes_') ||
        row_text.include?('_partner_sum_')
       partner_row_index = row_index
       puts "  Found partner row at index: #{partner_row_index}"
       break
     end
   end
-  
+
   # Add rows if we have multiple partners
   if partner_row_index && data['partners'].length > 1
     partner_row = table.rows[partner_row_index]
     partner_row_node = partner_row.node
-    
+
     num_rows_to_add = data['partners'].length - 1
     puts "  Adding #{num_rows_to_add} new row(s)..."
-    
+
     last_inserted = partner_row_node
     num_rows_to_add.times do |i|
       partner_number = i + 2  # Start from 2 (first partner uses original placeholders)
       new_row = partner_row_node.dup
-      
+      # ??? DUP ?
+
       # The placeholders are split across multiple text runs due to formatting
       # We need to handle this more carefully to preserve the structure
-      
+
       # For each cell in the new row, we need to modify placeholders while preserving formatting
       cells = new_row.xpath('.//w:tc')
       cells.each_with_index do |cell, cell_idx|
         # Create a temporary paragraph object to use the substitute_across_runs_with_block method
         cell.xpath('.//w:p').each do |p_node|
           temp_paragraph = Docx::Elements::Containers::Paragraph.new(p_node, {}, nil)
-          
+
           # Replace each placeholder with its numbered version
           temp_paragraph.substitute_across_runs_with_block(/_partner_full_name_/) do |match|
             "_partner_full_name_#{partner_number}_"
           end
-          
+
           temp_paragraph.substitute_across_runs_with_block(/_partner_total_quotes_/) do |match|
             "_partner_total_quotes_#{partner_number}_"
           end
-          
+
           temp_paragraph.substitute_across_runs_with_block(/_parner_total_quotes_/) do |match|
             "_parner_total_quotes_#{partner_number}_"
           end
-          
+
           temp_paragraph.substitute_across_runs_with_block(/_partner_sum_/) do |match|
             "_partner_sum_#{partner_number}_"
           end
-          
+
           temp_paragraph.substitute_across_runs_with_block(/_%_/) do |match|
             "_%_#{partner_number}_"
           end
-          
-          temp_paragraph.substitute_across_runs_with_block(/_percentage_/) do |match|
-            "_percentage_#{partner_number}_"
-          end
+
         end
-        
+
         # Debug: show what we have in this cell after modification
         cell_text = cell.xpath('.//w:t').map(&:content).join('')
         if cell_text.include?('_partner_') || cell_text.include?('_%_')
           puts "      Cell #{cell_idx + 1} after modification: #{cell_text}"
         end
       end
-      
+
       last_inserted.add_next_sibling(new_row)
       last_inserted = new_row
       puts "    ✅ Added row #{i + 1} with placeholders for partner #{partner_number}"
@@ -385,35 +384,8 @@ doc.tables.each_with_index do |table, table_index|
     row.cells.each_with_index do |cell, cell_index|
       cell.paragraphs.each_with_index do |paragraph, para_index|
 
-        # Apply the same replacement logic to table cells
-
-        # 1. OFFICE NAME
-        paragraph.substitute_across_runs_with_block(/_office_name_/) do |match|
-          result = data['society']['name']
-          puts "✅ Table #{table_index + 1}, Row #{row_index + 1}, Cell #{cell_index + 1}: _office_name_ → #{result[0..20]}..."
-          result
-        end
-
-        # 2. PARTNER QUALIFICATION
-        paragraph.substitute_across_runs_with_block(/_partner_qualification_/) do |match|
-          partners = data['partners']
-
-          if partners.length == 1
-            partner = partners.first
-            result = "#{partner['profession']}, #{partner['oab_number']}"
-          elsif partners.length == 2
-            p1, p2 = partners[0], partners[1]
-            result = "#{p1['name']} (#{p1['oab_number']}) e #{p2['name']} (#{p2['oab_number']}), ambos Advogados"
-          else
-            partner_list = partners.map { |p| "#{p['name']} (#{p['oab_number']})" }.join(', ')
-            result = "#{partner_list}, todos Advogados"
-          end
-          puts "✅ Table #{table_index + 1}, Row #{row_index + 1}, Cell #{cell_index + 1}: _partner_qualification_ → #{result[0..30]}..."
-          result
-        end
-
-        # 3. PARTNER FULL NAME
-        paragraph.substitute_across_runs_with_block(/_partner_full_name_/) do |match|
+        # 1. PARTNER FULL NAME
+        paragraph.substitute_across_runs_with_block(/(?<![_\w])_partner_full_name_(?![_\w])/) do |match|
           partners = data['partners']
 
           if partners.length == 1
@@ -430,26 +402,8 @@ doc.tables.each_with_index do |table, table_index|
           result
         end
 
-        # 4. PARTNER TOTAL QUOTES (with typo)
-        paragraph.substitute_across_runs_with_block(/_parner_total_quotes_/) do |match|
-          partners = data['partners']
-
-          if partners.length == 1
-            partner_capital = data['capital']['partners'].first
-            result = partner_capital['quotes'].to_s.gsub(/\B(?=(\d{3})+(?!\d))/, '.')
-          else
-            admin_partner = partners.find { |p| p['is_administrator'] }
-            partner_full_name = admin_partner ? full_name(admin_partner) : full_name(partners.first)
-
-            partner_capital = data['capital']['partners'].find { |p| p['name'] == partner_full_name }
-            result = partner_capital ? partner_capital['quotes'].to_s.gsub(/\B(?=(\d{3})+(?!\d))/, '.') : "0"
-          end
-          puts "✅ Table #{table_index + 1}, Row #{row_index + 1}, Cell #{cell_index + 1}: _parner_total_quotes_ → #{result}"
-          result
-        end
-
-        # 5. PARTNER TOTAL QUOTES (correct spelling)
-        paragraph.substitute_across_runs_with_block(/_partner_total_quotes_/) do |match|
+        # 2. PARTNER TOTAL QUOTES
+        paragraph.substitute_across_runs_with_block(/(?<![_\w])_partner_total_quotes_(?![_\w])/) do |match|
           partners = data['partners']
 
           if partners.length == 1
@@ -466,8 +420,8 @@ doc.tables.each_with_index do |table, table_index|
           result
         end
 
-        # 6. PARTNER SUM
-        paragraph.substitute_across_runs_with_block(/_partner_sum_/) do |match|
+        # 3. PARTNER SUM
+        paragraph.substitute_across_runs_with_block(/(?<![_\w])_partner_sum_(?![_\w])/) do |match|
           partners = data['partners']
 
           if partners.length == 1
@@ -484,8 +438,8 @@ doc.tables.each_with_index do |table, table_index|
           result
         end
 
-        # 7. PERCENTAGE
-        paragraph.substitute_across_runs_with_block(/_percentage_/) do |match|
+        # 4. PERCENTAGE
+        paragraph.substitute_across_runs_with_block(/(?<![_\w])_%_(?![_\w])/) do |match|
           partners = data['partners']
 
           if partners.length == 1
@@ -502,118 +456,76 @@ doc.tables.each_with_index do |table, table_index|
           result
         end
 
-        # 8. TOTAL QUOTES
-        paragraph.substitute_across_runs_with_block(/_total_quotes_/) do |match|
+        # 5. TOTAL QUOTES
+        paragraph.substitute_across_runs_with_block(/(?<![_\w])_total_quotes_(?![_\w])/) do |match|
           result = total_quotes.to_s.gsub(/\B(?=(\d{3})+(?!\d))/, '.')
           puts "✅ Table #{table_index + 1}, Row #{row_index + 1}, Cell #{cell_index + 1}: _total_quotes_ → #{result}"
           result
         end
 
-        # 9. SUM PERCENTAGE
-        paragraph.substitute_across_runs_with_block(/_sum_percentage_/) do |match|
+        # 6. SUM PERCENTAGE
+        paragraph.substitute_across_runs_with_block(/ _sum_percentage_ /) do |match|
           total_percentage = data['capital']['partners'].sum { |p| p['percentage'] }
           result = "#{total_percentage}%"
           puts "✅ Table #{table_index + 1}, Row #{row_index + 1}, Cell #{cell_index + 1}: _sum_percentage_ → #{result}"
           result
         end
 
-        # 10. OFFICE CITY
-        paragraph.substitute_across_runs_with_block(/_office_city_/) do |match|
-          result = data['society']['city']
-          puts "✅ Table #{table_index + 1}, Row #{row_index + 1}, Cell #{cell_index + 1}: _office_city_ → #{result}"
-          result
-        end
 
-        # 11. OFFICE STATE
-        paragraph.substitute_across_runs_with_block(/_office_state_/) do |match|
-          result = data['society']['state']
-          puts "✅ Table #{table_index + 1}, Row #{row_index + 1}, Cell #{cell_index + 1}: _office_state_ → #{result}"
-          result
-        end
 
-        # 12. OFFICE ADDRESS
-        paragraph.substitute_across_runs_with_block(/_office_address_/) do |match|
-          result = data['society']['address']
-          puts "✅ Table #{table_index + 1}, Row #{row_index + 1}, Cell #{cell_index + 1}: _office_address_ → #{result[0..30]}..."
-          result
-        end
 
-        # 13. OFFICE ZIP CODE
-        paragraph.substitute_across_runs_with_block(/_office_zip_code_/) do |match|
-          result = data['society']['zip_code']
-          puts "✅ Table #{table_index + 1}, Row #{row_index + 1}, Cell #{cell_index + 1}: _office_zip_code_ → #{result}"
-          result
-        end
 
-        # 14. OFFICE TOTAL VALUE
-        paragraph.substitute_across_runs_with_block(/_office_total_value_/) do |match|
-          result = "#{total_capital.to_i.to_s.gsub(/\B(?=(\d{3})+(?!\d))/, '.')},00"
-          puts "✅ Table #{table_index + 1}, Row #{row_index + 1}, Cell #{cell_index + 1}: _office_total_value_ → R$ #{result}"
-          result
-        end
-
-        # 15. OFFICE QUOTES
-        paragraph.substitute_across_runs_with_block(/_office_quotes_/) do |match|
-          result = total_quotes.to_s.gsub(/\B(?=(\d{3})+(?!\d))/, '.')
-          puts "✅ Table #{table_index + 1}, Row #{row_index + 1}, Cell #{cell_index + 1}: _office_quotes_ → #{result}"
-          result
-        end
-
-        # 16. OFFICE QUOTE VALUE
-        paragraph.substitute_across_runs_with_block(/_office_quote_value_/) do |match|
-          result = "#{quote_value.to_i},00"
-          puts "✅ Table #{table_index + 1}, Row #{row_index + 1}, Cell #{cell_index + 1}: _office_quote_value_ → R$ #{result}"
-          result
-        end
-        
         # 17-22. NUMBERED PARTNER PLACEHOLDERS (for partner 2, 3, 4, etc.)
         # Process each additional partner's placeholders
         if data['partners'].length > 1
-          (2..data['partners'].length).each do |partner_num|
-            partner_index = partner_num - 1  # Array index
-            partner_capital = data['capital']['partners'][partner_index]
+          # Get all partners except the admin (who is used in the first row)
+          admin_partner = data['partners'].find { |p| p['is_administrator'] }
+          remaining_partners = data['partners'].reject { |p| p['is_administrator'] }
+          
+          remaining_partners.each_with_index do |partner_info, idx|
+            partner_num = idx + 2  # Start numbering from 2
+            
+            # Find the corresponding capital data by matching names
+            partner_capital = data['capital']['partners'].find { |pc| pc['name'] == full_name(partner_info) }
             next unless partner_capital
-            
-            partner_info = data['partners'].find { |p| full_name(p) == partner_capital['name'] }
-            next unless partner_info
-            
+
             # Partner full name with number
-            paragraph.substitute_across_runs_with_block(/_partner_full_name_#{partner_num}_/) do |match|
+            paragraph.substitute_across_runs_with_block(/(?<![_\w])_partner_full_name_#{partner_num}_(?![_\w])/) do |match|
               result = full_name(partner_info)
               puts "✅ Table #{table_index + 1}, Row #{row_index + 1}, Cell #{cell_index + 1}: _partner_full_name_#{partner_num}_ → #{result}"
               result
             end
-            
+
             # Partner total quotes with number
-            paragraph.substitute_across_runs_with_block(/_partner_total_quotes_#{partner_num}_/) do |match|
+            paragraph.substitute_across_runs_with_block(/(?<![_\w])_partner_total_quotes_#{partner_num}_(?![_\w])/) do |match|
               result = partner_capital['quotes'].to_s.gsub(/\B(?=(\d{3})+(?!\d))/, '.')
               puts "✅ Table #{table_index + 1}, Row #{row_index + 1}, Cell #{cell_index + 1}: _partner_total_quotes_#{partner_num}_ → #{result}"
               result
             end
-            
+
             # Partner total quotes with typo and number
-            paragraph.substitute_across_runs_with_block(/_parner_total_quotes_#{partner_num}_/) do |match|
+            paragraph.substitute_across_runs_with_block(/(?<![_\w])_parner_total_quotes_#{partner_num}_(?![_\w])/) do |match|
               result = partner_capital['quotes'].to_s.gsub(/\B(?=(\d{3})+(?!\d))/, '.')
               puts "✅ Table #{table_index + 1}, Row #{row_index + 1}, Cell #{cell_index + 1}: _parner_total_quotes_#{partner_num}_ → #{result}"
               result
             end
-            
+
             # Partner sum with number
-            paragraph.substitute_across_runs_with_block(/_partner_sum_#{partner_num}_/) do |match|
+            paragraph.substitute_across_runs_with_block(/(?<![_\w])_partner_sum_#{partner_num}_(?![_\w])/) do |match|
               result = "#{partner_capital['value'].to_i.to_s.gsub(/\B(?=(\d{3})+(?!\d))/, '.')},00"
               puts "✅ Table #{table_index + 1}, Row #{row_index + 1}, Cell #{cell_index + 1}: _partner_sum_#{partner_num}_ → R$ #{result}"
               result
             end
-            
+
             # Percentage with number (short form)
-            paragraph.substitute_across_runs_with_block(/_%_#{partner_num}_/) do |match|
+            paragraph.substitute_across_runs_with_block(/(?<![_\w])_%_#{partner_num}_(?![_\w])/) do |match|
               result = "#{partner_capital['percentage']}%"
               puts "✅ Table #{table_index + 1}, Row #{row_index + 1}, Cell #{cell_index + 1}: _%_#{partner_num}_ → #{result}"
               result
             end
-            
+
             # Percentage with number (full form)
-            paragraph.substitute_across_runs_with_block(/_percentage_#{partner_num}_/) do |match|
+            paragraph.substitute_across_runs_with_block(/(?<![_\w])_percentage_#{partner_num}_(?![_\w])/) do |match|
               result = "#{partner_capital['percentage']}%"
               puts "✅ Table #{table_index + 1}, Row #{row_index + 1}, Cell #{cell_index + 1}: _percentage_#{partner_num}_ → #{result}"
               result
