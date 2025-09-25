@@ -205,6 +205,40 @@ module Docx
           text_runs.each { |run| run.send(:reset_text) }
         end
 
+        # Performs block-based text substitution with enhanced regex patterns
+        # Uses more powerful regex patterns to avoid placeholder overlapping
+        # If pattern is a string, it will be wrapped with word boundary protection: /(?<![_\w])pattern(?![_\w])/
+        def substitute_across_runs_with_block_regex(pattern, &block)
+          # Convert string patterns to regex with word boundary protection
+          if pattern.is_a?(String)
+            pattern = /(?<![_\w])#{Regexp.escape(pattern)}(?![_\w])/
+          end
+          all_text_nodes = []
+          text_runs.each do |run|
+            run.instance_variable_get(:@text_nodes).each do |text_node|
+              all_text_nodes << text_node
+            end
+          end
+
+          return if all_text_nodes.empty?
+
+          full_text = all_text_nodes.map(&:content).join('')
+          return unless full_text.match?(pattern)
+
+          new_text = full_text.gsub(pattern) { |_matched| 
+            block.call(Regexp.last_match)
+          }
+
+          if all_text_nodes.length == 1
+            all_text_nodes.first.content = new_text
+          else
+            all_text_nodes.first.content = new_text
+            all_text_nodes[1..-1].each { |node| node.content = '' }
+          end
+
+          text_runs.each { |run| run.send(:reset_text) }
+        end
+
         private
 
         # Helper method to consolidate a group of text runs with same formatting

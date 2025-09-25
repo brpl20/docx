@@ -21,7 +21,7 @@ puts "  Total Quotes: #{data['capital']['total_quotes']}"
 
 # Select Template
 partners = data['partners']
-
+template_file = partners.length == 1 ? 'tests/CS-TEMPLATE-INDIVIDUAL.docx' : 'tests/CS-TEMPLATE.docx'
 doc = Docx::Document.open(template_file)
 
 # Helpers
@@ -286,7 +286,7 @@ doc.paragraphs.each do |paragraph|
   end
 
   # 16. PRO LABORE - Replace with "Parágrafo Sétimo:" or remove if false/nil
-  paragraph.substitute_across_runs_with_block(/(?<![_\w])_pro_labore_(?![_\w])/) do |match|
+  paragraph.substitute_across_runs_with_block_regex("_pro_labore_") do |match|
     if data['society']['pro_labore']
       result = "Parágrafo Sétimo:"
       puts "✅ Replaced _pro_labore_: #{result}"
@@ -298,7 +298,7 @@ doc.paragraphs.each do |paragraph|
   end
 
   # 17. PRO LABORE TEXT - Replace with specific text or remove if false/nil
-  paragraph.substitute_across_runs_with_block(/(?<![_\w])_pro_labore_text_(?![_\w])/) do |match|
+  paragraph.substitute_across_runs_with_block_regex("_pro_labore_text_") do |match|
     if data['society']['pro_labore']
       result = "Pelo exercício da administração terão os sócios administradores direito a uma retirada mensal a título de \"pró-labore\", cujo valor será fixado em comum acordo entre os sócios e levado à conta de Despesas Gerais da Sociedade."
       puts "✅ Replaced _pro_labore_text_: #{result[0..80]}..."
@@ -310,7 +310,7 @@ doc.paragraphs.each do |paragraph|
   end
 
   # 18. DIVIDENDS - Replace with "Parágrafo Terceiro:" or remove if false/nil
-  paragraph.substitute_across_runs_with_block(/(?<![_\w])_dividends_(?![_\w])/) do |match|
+  paragraph.substitute_across_runs_with_block_regex("_dividends_") do |match|
     if data['society']['dividends']
       result = "Parágrafo Terceiro:"
       puts "✅ Replaced _dividends_: #{result}"
@@ -322,7 +322,7 @@ doc.paragraphs.each do |paragraph|
   end
 
   # 19. DIVIDENDS TEXT - Replace with pattern-based text or remove if false/nil
-  paragraph.substitute_across_runs_with_block(/(?<![_\w])_dividends_text_(?![_\w])/) do |match|
+  paragraph.substitute_across_runs_with_block_regex("_dividends_text_") do |match|
     if data['society']['dividends']
       pattern = data['society']['dividends_pattern'] || 1
       result = case pattern
@@ -342,7 +342,7 @@ doc.paragraphs.each do |paragraph|
   end
 
   # 20. DATE - Replace with today's date in Brazilian format
-  paragraph.substitute_across_runs_with_block(/(?<![_\w])_date_(?![_\w])/) do |match|
+  paragraph.substitute_across_runs_with_block_regex("_date_") do |match|
     today = Date.today
     months = [
       'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
@@ -439,46 +439,46 @@ doc.tables.each_with_index do |table, table_index|
       puts "    ✅ Added row #{i + 1} with placeholders for partner #{partner_number}"
     end
   end
-
+  
   # Find signature table row (Table 2)
   signature_row_index = nil
   table.rows.each_with_index do |row, row_index|
     row_text = row.cells.map { |cell|
       cell.paragraphs.map(&:to_s).join(' ')
     }.join(' ')
-
+    
     if row_text.include?('_partner_1_full_name_') || row_text.include?('_partner_2_full_name_')
       signature_row_index = row_index
       puts "  Found signature row at index: #{signature_row_index}"
       break
     end
   end
-
+  
   # Add rows for signature table (partners 3+)
   if signature_row_index && data['partners'].length > 2
     signature_row = table.rows[signature_row_index]
     signature_row_node = signature_row.node
-
+    
     # Calculate how many new rows we need (2 partners per row)
     partners_to_add = data['partners'].length - 2  # Subtract the 2 already in the template
     num_signature_rows_to_add = (partners_to_add + 1) / 2  # Round up for odd numbers
-
+    
     puts "  Adding #{num_signature_rows_to_add} new signature row(s) for #{partners_to_add} additional partner(s)..."
-
+    
     last_inserted = signature_row_node
     num_signature_rows_to_add.times do |row_num|
       new_row = signature_row_node.dup
-
+      
       # Calculate which partner numbers this row will handle
       first_partner_num = 3 + (row_num * 2)
       second_partner_num = first_partner_num + 1
-
+      
       # Process cells in the new row
       cells = new_row.xpath('.//w:tc')
       cells.each_with_index do |cell, cell_idx|
         cell.xpath('.//w:p').each do |p_node|
           temp_paragraph = Docx::Elements::Containers::Paragraph.new(p_node, {}, nil)
-
+          
           # Cell 0: Replace partner_1 with partner_3, partner_5, etc.
           # Cell 1: Replace partner_2 with partner_4, partner_6, etc.
           if cell_idx == 0
@@ -510,14 +510,14 @@ doc.tables.each_with_index do |table, table_index|
             end
           end
         end
-
+        
         # Debug output
         cell_text = cell.xpath('.//w:t').map(&:content).join('')
         if cell_text.include?('_partner_') || cell_text.include?('_parner_')
           puts "      Signature Cell #{cell_idx + 1} after modification: #{cell_text}"
         end
       end
-
+      
       last_inserted.add_next_sibling(new_row)
       last_inserted = new_row
       if second_partner_num <= data['partners'].length
@@ -542,7 +542,7 @@ doc.tables.each_with_index do |table, table_index|
       cell.paragraphs.each_with_index do |paragraph, para_index|
 
         # 1. PARTNER FULL NAME
-        paragraph.substitute_across_runs_with_block(/(?<![_\w])_partner_full_name_(?![_\w])/) do |match|
+        paragraph.substitute_across_runs_with_block_regex("_partner_full_name_") do |match|
           partners = data['partners']
 
           if partners.length == 1
@@ -560,7 +560,7 @@ doc.tables.each_with_index do |table, table_index|
         end
 
         # 2. PARTNER TOTAL QUOTES
-        paragraph.substitute_across_runs_with_block(/(?<![_\w])_partner_total_quotes_(?![_\w])/) do |match|
+        paragraph.substitute_across_runs_with_block_regex("_partner_total_quotes_") do |match|
           partners = data['partners']
 
           if partners.length == 1
@@ -578,7 +578,7 @@ doc.tables.each_with_index do |table, table_index|
         end
 
         # 3. PARTNER SUM
-        paragraph.substitute_across_runs_with_block(/(?<![_\w])_partner_sum_(?![_\w])/) do |match|
+        paragraph.substitute_across_runs_with_block_regex("_partner_sum_") do |match|
           partners = data['partners']
 
           if partners.length == 1
@@ -596,7 +596,7 @@ doc.tables.each_with_index do |table, table_index|
         end
 
         # 4. PERCENTAGE
-        paragraph.substitute_across_runs_with_block(/(?<![_\w])_%_(?![_\w])/) do |match|
+        paragraph.substitute_across_runs_with_block_regex("_%_") do |match|
           partners = data['partners']
 
           if partners.length == 1
@@ -614,7 +614,7 @@ doc.tables.each_with_index do |table, table_index|
         end
 
         # 5. TOTAL QUOTES
-        paragraph.substitute_across_runs_with_block(/(?<![_\w])_total_quotes_(?![_\w])/) do |match|
+        paragraph.substitute_across_runs_with_block_regex("_total_quotes_") do |match|
           result = total_quotes.to_s.gsub(/\B(?=(\d{3})+(?!\d))/, '.')
           puts "✅ Table #{table_index + 1}, Row #{row_index + 1}, Cell #{cell_index + 1}: _total_quotes_ → #{result}"
           result
@@ -629,7 +629,7 @@ doc.tables.each_with_index do |table, table_index|
         end
 
         # 7. PARTNER 1 FULL NAME - First partner (for signatures)
-        paragraph.substitute_across_runs_with_block(/(?<![_\w])_partner_1_full_name_(?![_\w])/) do |match|
+        paragraph.substitute_across_runs_with_block_regex("_partner_1_full_name_") do |match|
           partner = data['partners'][0]
           result = partner ? full_name(partner) : ""
           puts "✅ Table #{table_index + 1}, Row #{row_index + 1}, Cell #{cell_index + 1}: _partner_1_full_name_ → #{result}"
@@ -637,7 +637,7 @@ doc.tables.each_with_index do |table, table_index|
         end
 
         # 8. PARTNER 1 ASSOCIATION - First partner's role
-        paragraph.substitute_across_runs_with_block(/(?<![_\w])_parner_1_association_(?![_\w])/) do |match|
+        paragraph.substitute_across_runs_with_block_regex("_parner_1_association_") do |match|
           partner = data['partners'][0]
           result = partner ? partner['association'] : ""
           puts "✅ Table #{table_index + 1}, Row #{row_index + 1}, Cell #{cell_index + 1}: _parner_1_association_ → #{result}"
@@ -645,7 +645,7 @@ doc.tables.each_with_index do |table, table_index|
         end
 
         # 9. PARTNER 2 FULL NAME - Second partner (for signatures)
-        paragraph.substitute_across_runs_with_block(/(?<![_\w])_partner_2_full_name_(?![_\w])/) do |match|
+        paragraph.substitute_across_runs_with_block_regex("_partner_2_full_name_") do |match|
           partner = data['partners'][1]
           result = partner ? full_name(partner) : ""
           puts "✅ Table #{table_index + 1}, Row #{row_index + 1}, Cell #{cell_index + 1}: _partner_2_full_name_ → #{result}"
@@ -653,7 +653,7 @@ doc.tables.each_with_index do |table, table_index|
         end
 
         # 10. PARTNER 2 ASSOCIATION - Second partner's role
-        paragraph.substitute_across_runs_with_block(/(?<![_\w])_partner_2_association_(?![_\w])/) do |match|
+        paragraph.substitute_across_runs_with_block_regex("_partner_2_association_") do |match|
           partner = data['partners'][1]
           result = partner ? partner['association'] : ""
           puts "✅ Table #{table_index + 1}, Row #{row_index + 1}, Cell #{cell_index + 1}: _partner_2_association_ → #{result}"
@@ -666,18 +666,18 @@ doc.tables.each_with_index do |table, table_index|
           (3..data['partners'].length).each do |partner_num|
             partner_index = partner_num - 1
             partner = data['partners'][partner_index]
-
+            
             next unless partner
-
+            
             # Partner N full name
-            paragraph.substitute_across_runs_with_block(/(?<![_\w])_partner_#{partner_num}_full_name_(?![_\w])/) do |match|
+            paragraph.substitute_across_runs_with_block_regex("_partner_#{partner_num}_full_name_") do |match|
               result = full_name(partner)
               puts "✅ Table #{table_index + 1}, Row #{row_index + 1}, Cell #{cell_index + 1}: _partner_#{partner_num}_full_name_ → #{result}"
               result
             end
-
+            
             # Partner N association (with typo for consistency)
-            paragraph.substitute_across_runs_with_block(/(?<![_\w])_parner_#{partner_num}_association_(?![_\w])/) do |match|
+            paragraph.substitute_across_runs_with_block_regex("_parner_#{partner_num}_association_") do |match|
               result = partner['association']
               puts "✅ Table #{table_index + 1}, Row #{row_index + 1}, Cell #{cell_index + 1}: _parner_#{partner_num}_association_ → #{result}"
               result
@@ -700,42 +700,42 @@ doc.tables.each_with_index do |table, table_index|
             next unless partner_capital
 
             # Partner full name with number
-            paragraph.substitute_across_runs_with_block(/(?<![_\w])_partner_full_name_#{partner_num}_(?![_\w])/) do |match|
+            paragraph.substitute_across_runs_with_block_regex("_partner_full_name_#{partner_num}_") do |match|
               result = full_name(partner_info)
               puts "✅ Table #{table_index + 1}, Row #{row_index + 1}, Cell #{cell_index + 1}: _partner_full_name_#{partner_num}_ → #{result}"
               result
             end
 
             # Partner total quotes with number
-            paragraph.substitute_across_runs_with_block(/(?<![_\w])_partner_total_quotes_#{partner_num}_(?![_\w])/) do |match|
+            paragraph.substitute_across_runs_with_block_regex("_partner_total_quotes_#{partner_num}_") do |match|
               result = partner_capital['quotes'].to_s.gsub(/\B(?=(\d{3})+(?!\d))/, '.')
               puts "✅ Table #{table_index + 1}, Row #{row_index + 1}, Cell #{cell_index + 1}: _partner_total_quotes_#{partner_num}_ → #{result}"
               result
             end
 
             # Partner total quotes with typo and number
-            paragraph.substitute_across_runs_with_block(/(?<![_\w])_parner_total_quotes_#{partner_num}_(?![_\w])/) do |match|
+            paragraph.substitute_across_runs_with_block_regex("_parner_total_quotes_#{partner_num}_") do |match|
               result = partner_capital['quotes'].to_s.gsub(/\B(?=(\d{3})+(?!\d))/, '.')
               puts "✅ Table #{table_index + 1}, Row #{row_index + 1}, Cell #{cell_index + 1}: _parner_total_quotes_#{partner_num}_ → #{result}"
               result
             end
 
             # Partner sum with number
-            paragraph.substitute_across_runs_with_block(/(?<![_\w])_partner_sum_#{partner_num}_(?![_\w])/) do |match|
+            paragraph.substitute_across_runs_with_block_regex("_partner_sum_#{partner_num}_") do |match|
               result = "#{partner_capital['value'].to_i.to_s.gsub(/\B(?=(\d{3})+(?!\d))/, '.')},00"
               puts "✅ Table #{table_index + 1}, Row #{row_index + 1}, Cell #{cell_index + 1}: _partner_sum_#{partner_num}_ → R$ #{result}"
               result
             end
 
             # Percentage with number (short form)
-            paragraph.substitute_across_runs_with_block(/(?<![_\w])_%_#{partner_num}_(?![_\w])/) do |match|
+            paragraph.substitute_across_runs_with_block_regex("_%_#{partner_num}_") do |match|
               result = "#{partner_capital['percentage']}%"
               puts "✅ Table #{table_index + 1}, Row #{row_index + 1}, Cell #{cell_index + 1}: _%_#{partner_num}_ → #{result}"
               result
             end
 
             # Percentage with number (full form)
-            paragraph.substitute_across_runs_with_block(/(?<![_\w])_percentage_#{partner_num}_(?![_\w])/) do |match|
+            paragraph.substitute_across_runs_with_block_regex("_percentage_#{partner_num}_") do |match|
               result = "#{partner_capital['percentage']}%"
               puts "✅ Table #{table_index + 1}, Row #{row_index + 1}, Cell #{cell_index + 1}: _percentage_#{partner_num}_ → #{result}"
               result

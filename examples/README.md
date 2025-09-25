@@ -74,6 +74,44 @@ end
 
 **Use this when**: You need to ensure 100% reliability in production document generation.
 
+### 4. Advanced Regex Substitution (`substitute_across_runs_with_block_regex_usage.rb`)
+
+Demonstrates the new advanced substitution method with automatic word boundary protection:
+
+```ruby
+# Simple usage with automatic word boundaries
+paragraph.substitute_across_runs_with_block_regex("_company_name_") do |match|
+  "ACME Corporation Ltd."
+end
+
+# Dynamic patterns
+partner_number = 2
+paragraph.substitute_across_runs_with_block_regex("_partner_#{partner_number}_name_") do |match|
+  "John Smith"
+end
+
+# Custom complex regex when needed
+paragraph.substitute_across_runs_with_block_regex(/(?<![_\w])_office_\w+_(?![_\w])/) do |match|
+  "Various office information"
+end
+```
+
+**Use this when**: You need safe, reliable placeholder replacement that prevents overlapping issues.
+
+### 5. Method Comparison (`method_comparison.rb`)
+
+Shows the evolution from basic to advanced substitution methods:
+
+```ruby
+# OLD - Manual regex (error-prone)
+paragraph.substitute_across_runs_with_block(/(?<![_\w])_field_(?![_\w])/) { value }
+
+# NEW - Clean and safe
+paragraph.substitute_across_runs_with_block_regex("_field_") { value }
+```
+
+**Use this when**: You're migrating from older substitution methods or learning the differences.
+
 ## Running the Examples
 
 ```bash

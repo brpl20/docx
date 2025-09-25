@@ -169,6 +169,25 @@ doc.paragraphs.each do |p|
   }
 end
 
+# NEWEST - Advanced regex substitution with automatic word boundary protection
+doc.paragraphs.each do |p|
+  # Simple string patterns get automatic word boundary protection
+  p.substitute_across_runs_with_block_regex("_company_name_") do |match|
+    "ACME Corporation"
+  end
+  
+  # Dynamic patterns work seamlessly
+  partner_number = 2
+  p.substitute_across_runs_with_block_regex("_partner_#{partner_number}_name_") do |match|
+    "John Smith"
+  end
+  
+  # Custom regex patterns still supported when needed
+  p.substitute_across_runs_with_block_regex(/(?<![_\w])_office_(\w+)_(?![_\w])/) do |match|
+    office_data[match[1]]  # Uses captured group
+  end
+end
+
 # Save document to specified path
 doc.save('example-edited.docx')
 ```
@@ -311,8 +330,9 @@ For example, the text `{{name}}` might be stored in the XML as:
 This gem provides new methods to handle substitution across fragmented runs:
 
 1. **`substitute_across_runs(pattern, replacement)`** - Searches for and replaces text across all runs in a paragraph
-2. **`substitute_across_runs_with_block(pattern, &block)`** - Same as above but with block support for dynamic replacements
-3. **`consolidate_text_runs`** - Merges adjacent runs with identical formatting to reduce fragmentation
+2. **`substitute_across_runs_with_block(pattern, &block)`** - Same as above but with block support for dynamic replacements  
+3. **`substitute_across_runs_with_block_regex(pattern, &block)`** ⭐ **NEW!** - Advanced substitution with automatic word boundary protection
+4. **`consolidate_text_runs`** - Merges adjacent runs with identical formatting to reduce fragmentation
 
 ### Example Usage
 
@@ -337,6 +357,59 @@ doc.paragraphs.each do |paragraph|
 end
 
 doc.save('output.docx')
+```
+
+### Advanced Regex Substitution ⭐ NEW!
+
+The new `substitute_across_runs_with_block_regex` method provides automatic word boundary protection and prevents placeholder overlapping issues:
+
+```ruby
+require 'docx'
+
+doc = Docx::Document.open('template.docx')
+
+doc.paragraphs.each do |paragraph|
+  # Simple usage - automatic word boundary protection
+  # Pattern "_company_name_" becomes /(?<![_\w])_company_name_(?![_\w])/
+  paragraph.substitute_across_runs_with_block_regex("_company_name_") do |match|
+    "ACME Corporation"
+  end
+  
+  # Dynamic patterns work seamlessly
+  partner_number = 2
+  paragraph.substitute_across_runs_with_block_regex("_partner_#{partner_number}_name_") do |match|
+    partner_data[partner_number]['name']
+  end
+  
+  # Conditional replacements
+  paragraph.substitute_across_runs_with_block_regex("_optional_clause_") do |match|
+    include_clause ? "This clause is included." : ""
+  end
+  
+  # Custom complex regex patterns when needed
+  paragraph.substitute_across_runs_with_block_regex(/(?<![_\w])_office_(\w+)_(?![_\w])/) do |match|
+    field_name = match[1]  # captured group
+    office_data[field_name] || "N/A"
+  end
+end
+
+doc.save('advanced_output.docx')
+```
+
+**Key Benefits:**
+- 🛡️ **Automatic Protection**: String patterns get word boundary protection automatically
+- 🧹 **Cleaner Code**: No need to write complex regex patterns manually  
+- 🔒 **Overlap Prevention**: Prevents issues like `_partner_name_2_` matching `_partner_name_`
+- 🎯 **Flexible**: Still supports custom regex when needed
+- ⚡ **Reliable**: Handles Word's text fragmentation seamlessly
+
+**Migration Guide:**
+```ruby
+# OLD - Manual regex (error-prone)
+paragraph.substitute_across_runs_with_block(/(?<![_\w])_field_(?![_\w])/) { value }
+
+# NEW - Clean and safe  
+paragraph.substitute_across_runs_with_block_regex("_field_") { value }
 ```
 
 ## Placeholder Debugger
