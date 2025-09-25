@@ -380,13 +380,13 @@ doc.tables.each_with_index do |table, table_index|
     end
   end
 
-  # Add rows if we have multiple partners
+  # Add rows if we have multiple partners (Table 1 - Capital table)
   if partner_row_index && data['partners'].length > 1
     partner_row = table.rows[partner_row_index]
     partner_row_node = partner_row.node
 
     num_rows_to_add = data['partners'].length - 1
-    puts "  Adding #{num_rows_to_add} new row(s)..."
+    puts "  Adding #{num_rows_to_add} new row(s) for capital table..."
 
     last_inserted = partner_row_node
     num_rows_to_add.times do |i|
@@ -437,6 +437,94 @@ doc.tables.each_with_index do |table, table_index|
       last_inserted.add_next_sibling(new_row)
       last_inserted = new_row
       puts "    ✅ Added row #{i + 1} with placeholders for partner #{partner_number}"
+    end
+  end
+  
+  # Find signature table row (Table 2)
+  signature_row_index = nil
+  table.rows.each_with_index do |row, row_index|
+    row_text = row.cells.map { |cell|
+      cell.paragraphs.map(&:to_s).join(' ')
+    }.join(' ')
+    
+    if row_text.include?('_partner_1_full_name_') || row_text.include?('_partner_2_full_name_')
+      signature_row_index = row_index
+      puts "  Found signature row at index: #{signature_row_index}"
+      break
+    end
+  end
+  
+  # Add rows for signature table (partners 3+)
+  if signature_row_index && data['partners'].length > 2
+    signature_row = table.rows[signature_row_index]
+    signature_row_node = signature_row.node
+    
+    # Calculate how many new rows we need (2 partners per row)
+    partners_to_add = data['partners'].length - 2  # Subtract the 2 already in the template
+    num_signature_rows_to_add = (partners_to_add + 1) / 2  # Round up for odd numbers
+    
+    puts "  Adding #{num_signature_rows_to_add} new signature row(s) for #{partners_to_add} additional partner(s)..."
+    
+    last_inserted = signature_row_node
+    num_signature_rows_to_add.times do |row_num|
+      new_row = signature_row_node.dup
+      
+      # Calculate which partner numbers this row will handle
+      first_partner_num = 3 + (row_num * 2)
+      second_partner_num = first_partner_num + 1
+      
+      # Process cells in the new row
+      cells = new_row.xpath('.//w:tc')
+      cells.each_with_index do |cell, cell_idx|
+        cell.xpath('.//w:p').each do |p_node|
+          temp_paragraph = Docx::Elements::Containers::Paragraph.new(p_node, {}, nil)
+          
+          # Cell 0: Replace partner_1 with partner_3, partner_5, etc.
+          # Cell 1: Replace partner_2 with partner_4, partner_6, etc.
+          if cell_idx == 0
+            # First cell - odd numbered partners (3, 5, 7...)
+            temp_paragraph.substitute_across_runs_with_block(/_partner_1_full_name_/) do |match|
+              "_partner_#{first_partner_num}_full_name_"
+            end
+            temp_paragraph.substitute_across_runs_with_block(/_parner_1_association_/) do |match|
+              "_parner_#{first_partner_num}_association_"
+            end
+          elsif cell_idx == 1
+            # Second cell - even numbered partners (4, 6, 8...)
+            # Only add placeholders if this partner actually exists
+            if second_partner_num <= data['partners'].length
+              temp_paragraph.substitute_across_runs_with_block(/_partner_2_full_name_/) do |match|
+                "_partner_#{second_partner_num}_full_name_"
+              end
+              temp_paragraph.substitute_across_runs_with_block(/_partner_2_association_/) do |match|
+                "_parner_#{second_partner_num}_association_"
+              end
+            else
+              # Clear the placeholders if partner doesn't exist
+              temp_paragraph.substitute_across_runs_with_block(/_partner_2_full_name_/) do |match|
+                ""
+              end
+              temp_paragraph.substitute_across_runs_with_block(/_partner_2_association_/) do |match|
+                ""
+              end
+            end
+          end
+        end
+        
+        # Debug output
+        cell_text = cell.xpath('.//w:t').map(&:content).join('')
+        if cell_text.include?('_partner_') || cell_text.include?('_parner_')
+          puts "      Signature Cell #{cell_idx + 1} after modification: #{cell_text}"
+        end
+      end
+      
+      last_inserted.add_next_sibling(new_row)
+      last_inserted = new_row
+      if second_partner_num <= data['partners'].length
+        puts "    ✅ Added signature row #{row_num + 1} with placeholders for partners #{first_partner_num} and #{second_partner_num}"
+      else
+        puts "    ✅ Added signature row #{row_num + 1} with placeholder for partner #{first_partner_num}"
+      end
     end
   end
 end
@@ -572,9 +660,30 @@ doc.tables.each_with_index do |table, table_index|
           result
         end
 
-
-
-
+        # 11-16. DYNAMIC PARTNER PLACEHOLDERS (for partners 3, 4, 5, 6, etc.)
+        # Process placeholders for partners 3 and beyond (for signature table)
+        if data['partners'].length > 2
+          (3..data['partners'].length).each do |partner_num|
+            partner_index = partner_num - 1
+            partner = data['partners'][partner_index]
+            
+            next unless partner
+            
+            # Partner N full name
+            paragraph.substitute_across_runs_with_block(/(?<![_\w])_partner_#{partner_num}_full_name_(?![_\w])/) do |match|
+              result = full_name(partner)
+              puts "✅ Table #{table_index + 1}, Row #{row_index + 1}, Cell #{cell_index + 1}: _partner_#{partner_num}_full_name_ → #{result}"
+              result
+            end
+            
+            # Partner N association (with typo for consistency)
+            paragraph.substitute_across_runs_with_block(/(?<![_\w])_parner_#{partner_num}_association_(?![_\w])/) do |match|
+              result = partner['association']
+              puts "✅ Table #{table_index + 1}, Row #{row_index + 1}, Cell #{cell_index + 1}: _parner_#{partner_num}_association_ → #{result}"
+              result
+            end
+          end
+        end
 
         # 17-22. NUMBERED PARTNER PLACEHOLDERS (for partner 2, 3, 4, etc.)
         # Process each additional partner's placeholders
